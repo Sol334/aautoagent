@@ -17,6 +17,16 @@ pytest tests/ -q             # 69 tests, fully mocked — no keys needed
 ## Common Commands
 
 ```bash
+# Congressional trade tracker (new — multi-source STOCK Act signals)
+python scripts/congressional_tracker.py --recent          # last 30 days
+python scripts/congressional_tracker.py --sector TECH     # filter by sector
+# Set QUIVER_API_TOKEN for Quiver Quantitative data (best, $30/mo)
+# Falls back to free House Stock Watcher API automatically
+
+# Market regime detector (new — gates all trading decisions)
+python scripts/regime_detector.py --ticker SPY            # current regime
+python scripts/regime_detector.py --regime-only           # just the label
+
 # Political watchdog (congressional trade monitor)
 python scripts/political_watchdog.py --test       # Synthetic trade → Telegram alert
 python scripts/political_watchdog.py --dry-run    # Real Finnhub, no Telegram
@@ -60,13 +70,15 @@ make analyst     # market_analyst --dry-run --ticker NVDA
 ├── data_pipelines/
 │   └── finnhub_connector.py    Finnhub REST client (rate limiting, retry, amount parser)
 ├── scripts/
-│   ├── political_watchdog.py   Main pipeline: fetch → detect → analyze → alert
-│   ├── paper_trader.py         Position sizing with kill switch + macro regime integration
-│   ├── market_analyst.py       5-signal aggregator → Ollama BUY/SELL/HOLD → Capital.md
-│   ├── options_flow_monitor.py Polygon OTM options vol/OI unusual activity detection
-│   ├── wheel_trader.py         Black-Scholes CSP simulator for SPY/QQQ weekly premium
-│   ├── crypto_trader.py        Coinbase paper trading (FEATURE_CRYPTO_TRADING gate)
-│   └── model_benchmark.py      Score Ollama models on historical congressional trades
+│   ├── congressional_tracker.py  Multi-source STOCK Act signal aggregator (free + Quiver tier)
+│   ├── regime_detector.py        K-Means-inspired regime classification — gates all trades
+│   ├── political_watchdog.py     Main pipeline: fetch → detect → analyze → alert
+│   ├── paper_trader.py           Position sizing with kill switch + macro regime integration
+│   ├── market_analyst.py         5-signal aggregator → Ollama BUY/SELL/HOLD → Capital.md
+│   ├── options_flow_monitor.py   Polygon OTM options vol/OI unusual activity detection
+│   ├── wheel_trader.py           Black-Scholes CSP simulator for SPY/QQQ weekly premium
+│   ├── crypto_trader.py          Coinbase paper trading (FEATURE_CRYPTO_TRADING gate)
+│   └── model_benchmark.py        Score Ollama models on historical congressional trades
 ├── brain/
 │   └── Capital.md              Living context: active signals, positions, risk rules
 ├── config/

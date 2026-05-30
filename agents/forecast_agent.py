@@ -103,3 +103,25 @@ class ForecastAgent:
         except Exception as exc:
             log.warning("ForecastAgent.predict_trend error, falling back to SMA: %s", exc)
             return self._sma_fallback(prices)
+
+    def predict_gated(self, prices: list, ticker: str = "SPY") -> dict:
+        """Regime-gated prediction — returns trend + regime + actionable bool.
+
+        Only recommends action in TRENDING_BULL regime to avoid whipsaw losses
+        in mean-reverting or high-volatility market conditions.
+        """
+        try:
+            from regime_detector import detect_regime, TRENDING_BULL
+            regime_result = detect_regime(ticker)
+        except Exception:
+            regime_result = {"regime": -1, "label": "UNKNOWN", "action": "unknown", "confidence": 0.0}
+            TRENDING_BULL = 0
+
+        trend = self.predict_trend(prices)
+        tradeable = regime_result.get("regime") == TRENDING_BULL and trend == "up"
+        return {
+            "trend":     trend,
+            "regime":    regime_result.get("label", "UNKNOWN"),
+            "tradeable": tradeable,
+            "reason":    regime_result.get("action", ""),
+        }
