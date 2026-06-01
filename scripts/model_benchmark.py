@@ -19,13 +19,11 @@ import time
 from pathlib import Path
 
 CAPITAL_ROOT = Path(__file__).resolve().parent.parent
-SYSTEM_ROOT = CAPITAL_ROOT  # repo root (was galactic-system parent before extraction)
 
-sys.path.insert(0, str(SYSTEM_ROOT))
 sys.path.insert(0, str(CAPITAL_ROOT))
 
 from dotenv import load_dotenv
-load_dotenv(SYSTEM_ROOT / ".env")
+load_dotenv(CAPITAL_ROOT / ".env")
 
 import httpx
 
@@ -39,7 +37,7 @@ if not OLLAMA_HOST.startswith("http"):
 
 RESULTS_PATH = CAPITAL_ROOT / "data" / "benchmark_results.json"
 
-# ── test cases with known historical signals ────────────────────────────────────
+# ── test cases with known historical signals ──────────────────────────────────────────────
 # Source: actual congressional disclosures (public record)
 TEST_CASES = [
     {

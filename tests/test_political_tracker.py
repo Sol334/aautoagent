@@ -7,8 +7,6 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 CAPITAL_ROOT = Path(__file__).resolve().parent.parent
-SYSTEM_ROOT = CAPITAL_ROOT  # repo root (was galactic-system parent before extraction)
-sys.path.insert(0, str(SYSTEM_ROOT))
 sys.path.insert(0, str(CAPITAL_ROOT))
 
 

@@ -21,20 +21,18 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 CAPITAL_ROOT = Path(__file__).resolve().parent.parent
-SYSTEM_ROOT = CAPITAL_ROOT  # repo root (was galactic-system parent before extraction)
 
-sys.path.insert(0, str(SYSTEM_ROOT))
 sys.path.insert(0, str(CAPITAL_ROOT))
 
 from dotenv import load_dotenv
-load_dotenv(SYSTEM_ROOT / ".env")
+load_dotenv(CAPITAL_ROOT / ".env")
 
 import httpx
 
 from agents.political_tracker import PoliticalTracker, TradeSignal
 from data_pipelines.finnhub_connector import FinnhubConnector
 
-# ── config ─────────────────────────────────────────────────────────────────────
+# ── config ───────────────────────────────────────────────────────────────────────────────
 logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO"),
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -58,7 +56,7 @@ CLUSTER_DAYS    = int(os.getenv("WATCHDOG_CLUSTER_DAYS", "30"))
 SIGNAL_MIN_CONF = float(os.getenv("WATCHDOG_SIGNAL_MIN_CONF", "0.5"))
 
 
-# ── state management ───────────────────────────────────────────────────────────
+# ── state management ─────────────────────────────────────────────────────────────────────────────
 
 def _load_state() -> set:
     STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -87,7 +85,7 @@ def _append_log(entry: dict) -> None:
     LOG_PATH.write_text(json.dumps(log_entries[-1000:], indent=2))
 
 
-# ── Telegram ───────────────────────────────────────────────────────────────────
+# ── Telegram ──────────────────────────────────────────────────────────────────────────────────
 
 def _send_telegram(message: str, dry_run: bool) -> None:
     if dry_run:
@@ -116,7 +114,7 @@ def _format_alert(signal: TradeSignal) -> str:
         f"  • {t['representative']} — {t['type']} {t['amount_range']}"
         for t in signal.raw_trades[:5]
     )
-    edge = " 🏛️ Committee edge" if signal.committee_edge else ""
+    edge = " 🏗️ Committee edge" if signal.committee_edge else ""
     return (
         f"{direction} <b>GALACTIC CAPITAL — Political Signal</b>\n"
         f"<b>Ticker:</b> {signal.ticker} | <b>Signal:</b> {signal.signal} "
@@ -126,7 +124,7 @@ def _format_alert(signal: TradeSignal) -> str:
     )
 
 
-# ── detection logic ─────────────────────────────────────────────────────────────
+# ── detection logic ─────────────────────────────────────────────────────────────────────────────
 
 def _detect_new_trades(all_trades: list, seen_ids: set) -> list:
     """Filter to trades not yet seen."""
@@ -150,7 +148,7 @@ def _is_high_value(trade: dict) -> bool:
     return trade.get("_amount_mid", 0) >= HIGH_VALUE_MIN
 
 
-# ── synthetic test data ────────────────────────────────────────────────────────
+# ── synthetic test data ────────────────────────────────────────────────────────────────────────────
 
 _TEST_TRADES = [
     {
@@ -176,7 +174,7 @@ _TEST_TRADES = [
 ]
 
 
-# ── main ───────────────────────────────────────────────────────────────────────
+# ── main ──────────────────────────────────────────────────────────────────────────────────────
 
 def run(dry_run: bool = False, test_mode: bool = False) -> dict:
     log.info("Political Watchdog starting (%s)", "TEST" if test_mode else "LIVE" if not dry_run else "DRY-RUN")
