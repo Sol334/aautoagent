@@ -1,6 +1,5 @@
 """Tests for regime_detector.py — market regime classification."""
 import sys
-import math
 from pathlib import Path
 from unittest.mock import patch
 

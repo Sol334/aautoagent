@@ -23,7 +23,7 @@ Env vars:
 """
 
 import os, json, logging, argparse
-from collections import Counter, defaultdict
+from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -217,7 +217,7 @@ if __name__ == "__main__":
         print(f"  {sig['ticker']:6s} [{sig['sector']:12s}] {sig['member_count']} members — confidence {sig['confidence']:.0%}")
         print(f"    Members: {', '.join(sig['members'][:5])}")
 
-    print(f"\n=== Sector Pressure ===")
+    print("\n=== Sector Pressure ===")
     for sector, data in sorted(pressure.items(), key=lambda x: -x[1]["buys"]):
         print(f"  {sector:12s}  buys={data['buys']:3d}  sells={data['sells']:3d}  unique_members={data['members']}")
 
