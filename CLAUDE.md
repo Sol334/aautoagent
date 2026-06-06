@@ -11,7 +11,7 @@ run on the same machine.
 ```bash
 pip install -r requirements.txt
 cp .env.template .env        # fill in FINNHUB / ALPACA / POLYGON / FRED keys
-pytest tests/ -q             # 69 tests, fully mocked — no keys needed
+pytest tests/ -q             # 115 tests, fully mocked — no keys needed
 ```
 
 ## Common Commands
@@ -61,12 +61,13 @@ make analyst     # market_analyst --dry-run --ticker NVDA
 ```
 .
 ├── agents/
-│   ├── base_agent.py           Ollama blocking call wrapper (strips <think> tags)
-│   ├── political_tracker.py    Congressional trade → LLM → TradeSignal list
-│   ├── sentiment_agent.py      ProsusAI/finBERT news sentiment scoring (-1.0 to +1.0)
-│   ├── forecast_agent.py       IBM Granite TTM-R2 price trend prediction
-│   ├── earnings_agent.py       yfinance earnings calendar — IV expansion window detection
-│   └── macro_agent.py          FRED yield curve + VIX → risk_on / neutral / risk_off regime
+│   ├── base_agent.py              Ollama blocking call wrapper (strips <think> tags)
+│   ├── political_tracker.py       Congressional trade → LLM → TradeSignal list
+│   ├── sentiment_agent.py         ProsusAI/finBERT news sentiment scoring (-1.0 to +1.0)
+│   ├── forecast_agent.py          IBM Granite TTM-R2 price trend prediction
+│   ├── earnings_agent.py          yfinance earnings calendar — IV expansion window detection
+│   ├── fundamental_analyst.py     yfinance PE/PB/EPS/revenue/D:E → BULLISH/BEARISH/NEUTRAL
+│   └── macro_agent.py             FRED yield curve + VIX → risk_on / neutral / risk_off regime
 ├── data_pipelines/
 │   └── finnhub_connector.py    Finnhub REST client (rate limiting, retry, amount parser)
 ├── scripts/
@@ -95,8 +96,9 @@ For each ticker in `CAPITAL_WATCHLIST`, the pipeline runs 5 data sources:
 3. **Earnings calendar** — yfinance → days to earnings, EPS estimate, IV window flag
 4. **Options flow** — Polygon OTM vol/OI ratio → unusual_calls / unusual_puts / normal
 5. **Political signal** — cross-reference Capital.md signal log for congressional trades
+6. **Fundamentals** — yfinance PE/PB/EPS/revenue growth/D:E → BULLISH/BEARISH/NEUTRAL
 
-All 5 signals feed into a single Ollama prompt → BUY / SELL / HOLD + reason.
+All 6 signals feed into a single Ollama prompt → BUY / SELL / HOLD + reason.
 
 **Macro overlay**: If `FRED_API_KEY` set, `MacroAgent` checks 10Y-2Y yield curve spread + VIX.
 In `risk_off` regime (spread < 0 AND VIX > 25): kill switch tightens 50% (20% → 10% drawdown limit).

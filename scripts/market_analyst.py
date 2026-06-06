@@ -37,6 +37,7 @@ from agents.base_agent import BaseAgent
 from agents.sentiment_agent import SentimentAgent
 from agents.forecast_agent import ForecastAgent
 from agents.earnings_agent import EarningsAgent
+from agents.fundamental_analyst import FundamentalAnalyst
 from scripts.options_flow_monitor import detect_unusual_flow
 
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
@@ -91,6 +92,7 @@ def _ask_ollama(
     political: str,
     earnings_summary: str = "",
     options_flow: str = "normal",
+    fundamentals_summary: str = "",
 ) -> tuple:
     """Query Ollama for a BUY/SELL/HOLD recommendation. Returns (action, reason)."""
     extra_lines = ""
@@ -98,6 +100,8 @@ def _ask_ollama(
         extra_lines += f"- Earnings context: {earnings_summary}\n"
     if options_flow != "normal":
         extra_lines += f"- Options flow: {options_flow} (institutional positioning signal)\n"
+    if fundamentals_summary:
+        extra_lines += f"- Fundamentals: {fundamentals_summary}\n"
 
     prompt = (
         f"You are a financial analyst. For ticker {ticker}:\n"
@@ -174,6 +178,7 @@ def run_analysis(tickers: list, dry_run: bool = False) -> dict:
     sentiment_agent = SentimentAgent()
     forecast_agent = ForecastAgent()
     earnings_agent = EarningsAgent()
+    fundamental_analyst = FundamentalAnalyst()
     political = _read_political_signals()
 
     results = {}
@@ -195,9 +200,12 @@ def run_analysis(tickers: list, dry_run: bool = False) -> dict:
         if flow != "normal":
             log.info("%s: UNUSUAL OPTIONS FLOW — %s", ticker, flow)
 
+        fund_signal = fundamental_analyst.analyze(ticker)
+        log.info("%s: fundamentals %s (conf=%.2f)", ticker, fund_signal.signal, fund_signal.confidence)
+
         pol_signal = political.get(ticker, "")
         action, reason = _ask_ollama(
-            ticker, score, trend, pol_signal, earnings_summary, flow
+            ticker, score, trend, pol_signal, earnings_summary, flow, fund_signal.summary
         )
 
         results[ticker] = {
@@ -205,6 +213,7 @@ def run_analysis(tickers: list, dry_run: bool = False) -> dict:
             "reason": reason,
             "score": score,
             "trend": trend,
+            "fundamentals": fund_signal.signal,
         }
         log.info(
             "%s: %s  sentiment %.2f  forecast %s", ticker, action, score, trend
