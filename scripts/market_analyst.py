@@ -39,6 +39,8 @@ from agents.forecast_agent import ForecastAgent
 from agents.earnings_agent import EarningsAgent
 from agents.fundamental_analyst import FundamentalAnalyst
 from scripts.options_flow_monitor import detect_unusual_flow
+from data_pipelines.edgar_connector import EDGARConnector
+from decision.consensus_engine import ConsensusEngine
 
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv(
@@ -93,6 +95,7 @@ def _ask_ollama(
     earnings_summary: str = "",
     options_flow: str = "normal",
     fundamentals_summary: str = "",
+    consensus_summary: str = "",
 ) -> tuple:
     """Query Ollama for a BUY/SELL/HOLD recommendation. Returns (action, reason)."""
     extra_lines = ""
@@ -102,6 +105,8 @@ def _ask_ollama(
         extra_lines += f"- Options flow: {options_flow} (institutional positioning signal)\n"
     if fundamentals_summary:
         extra_lines += f"- Fundamentals: {fundamentals_summary}\n"
+    if consensus_summary:
+        extra_lines += f"- Signal consensus: {consensus_summary}\n"
 
     prompt = (
         f"You are a financial analyst. For ticker {ticker}:\n"
@@ -179,6 +184,8 @@ def run_analysis(tickers: list, dry_run: bool = False) -> dict:
     forecast_agent = ForecastAgent()
     earnings_agent = EarningsAgent()
     fundamental_analyst = FundamentalAnalyst()
+    edgar = EDGARConnector()
+    consensus_engine = ConsensusEngine()
     political = _read_political_signals()
 
     results = {}
@@ -203,9 +210,28 @@ def run_analysis(tickers: list, dry_run: bool = False) -> dict:
         fund_signal = fundamental_analyst.analyze(ticker)
         log.info("%s: fundamentals %s (conf=%.2f)", ticker, fund_signal.signal, fund_signal.confidence)
 
+        insider_trades = edgar.get_insider_trades(ticker, days_back=30)
+        if insider_trades:
+            log.info("%s: %d insider trades (buys: %d)", ticker, len(insider_trades),
+                     sum(1 for t in insider_trades if t.is_buy))
+
         pol_signal = political.get(ticker, "")
+
+        consensus = consensus_engine.score(
+            ticker,
+            sentiment=score,
+            trend=trend,
+            earnings_ctx=earnings_ctx,
+            options_flow=flow,
+            fundamental=fund_signal,
+            insider_trades=insider_trades,
+            political_signal=pol_signal,
+        )
+        log.info("%s consensus: %s (score %+.2f)", ticker, consensus.conviction, consensus.weighted_score)
+
         action, reason = _ask_ollama(
-            ticker, score, trend, pol_signal, earnings_summary, flow, fund_signal.summary
+            ticker, score, trend, pol_signal, earnings_summary, flow, fund_signal.summary,
+            consensus.summary,
         )
 
         results[ticker] = {
@@ -214,6 +240,8 @@ def run_analysis(tickers: list, dry_run: bool = False) -> dict:
             "score": score,
             "trend": trend,
             "fundamentals": fund_signal.signal,
+            "consensus_score": consensus.weighted_score,
+            "conviction": consensus.conviction,
         }
         log.info(
             "%s: %s  sentiment %.2f  forecast %s", ticker, action, score, trend
