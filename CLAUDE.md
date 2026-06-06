@@ -11,7 +11,7 @@ run on the same machine.
 ```bash
 pip install -r requirements.txt
 cp .env.template .env        # fill in FINNHUB / ALPACA / POLYGON / FRED keys
-pytest tests/ -q             # 115 tests, fully mocked — no keys needed
+pytest tests/ -q             # 149 tests, fully mocked — no keys needed
 ```
 
 ## Common Commands
@@ -68,6 +68,8 @@ make analyst     # market_analyst --dry-run --ticker NVDA
 │   ├── earnings_agent.py          yfinance earnings calendar — IV expansion window detection
 │   ├── fundamental_analyst.py     yfinance PE/PB/EPS/revenue/D:E → BULLISH/BEARISH/NEUTRAL
 │   └── macro_agent.py             FRED yield curve + VIX → risk_on / neutral / risk_off regime
+├── decision/
+│   └── consensus_engine.py        Weighted 7-signal aggregator → ConsensusSignal (score, conviction)
 ├── data_pipelines/
 │   └── finnhub_connector.py    Finnhub REST client (rate limiting, retry, amount parser)
 ├── scripts/
@@ -97,8 +99,11 @@ For each ticker in `CAPITAL_WATCHLIST`, the pipeline runs 5 data sources:
 4. **Options flow** — Polygon OTM vol/OI ratio → unusual_calls / unusual_puts / normal
 5. **Political signal** — cross-reference Capital.md signal log for congressional trades
 6. **Fundamentals** — yfinance PE/PB/EPS/revenue growth/D:E → BULLISH/BEARISH/NEUTRAL
+7. **EDGAR insider trades** — SEC Form 4 filings, ~2-day lag, officer/director transactions
 
-All 6 signals feed into a single Ollama prompt → BUY / SELL / HOLD + reason.
+All 7 signals flow through **ConsensusEngine** (weighted score + conviction) → injected into Ollama prompt → BUY / SELL / HOLD + reason.
+
+**Signal weights:** insider 25% · political 20% · options_flow 20% · fundamentals 15% · sentiment 10% · forecast 5% · earnings 5%
 
 **Macro overlay**: If `FRED_API_KEY` set, `MacroAgent` checks 10Y-2Y yield curve spread + VIX.
 In `risk_off` regime (spread < 0 AND VIX > 25): kill switch tightens 50% (20% → 10% drawdown limit).
