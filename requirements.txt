@@ -15,3 +15,7 @@ fredapi>=0.5.1
 # ── ML models (finBERT sentiment, Granite forecast) ──
 transformers>=4.40.0
 torch>=2.2.0
+
+# ── A2A Agent Hub ──
+fastapi>=0.115.0
+uvicorn>=0.30.0
