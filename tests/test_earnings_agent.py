@@ -36,19 +36,15 @@ class TestEarningsAgentEmpty(unittest.TestCase):
         self.assertFalse(result["is_within_window"])
 
     def test_returns_empty_when_yfinance_missing(self):
-        # Remove yfinance from modules to simulate ImportError path
-        saved = sys.modules.pop("yfinance", None)
-        try:
+        # patch.dict with None forces ImportError even when yfinance is installed
+        with patch.dict(sys.modules, {"yfinance": None}):
             import importlib
             import earnings_agent as ea_mod
             importlib.reload(ea_mod)
             from earnings_agent import EarningsAgent
             agent = EarningsAgent()
             result = agent.get_earnings_context("AAPL")
-            self.assertIsNone(result["days_to_earnings"])
-        finally:
-            if saved is not None:
-                sys.modules["yfinance"] = saved
+        self.assertIsNone(result["days_to_earnings"])
 
     def test_returns_empty_on_yfinance_exception(self):
         mock_yf = MagicMock()

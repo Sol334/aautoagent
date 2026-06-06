@@ -2,6 +2,11 @@
 target-version = "py311"
 line-length = 120
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "--tb=short"
+
 [tool.ruff.lint]
 # Mirror the Sol334/galactic-system rule set: real-bug checks only.
 # E402/E401 are intentionally excluded — scripts use the sys.path-insert-before-import
