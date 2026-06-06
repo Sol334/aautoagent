@@ -46,15 +46,12 @@ class TestOptionsFlowMonitorSignals(unittest.TestCase):
 
     def test_unusual_calls_detected(self):
         import importlib, os, json
-        response = json.dumps({"results": self._make_chain_result(volume=5000, oi=500)})
+        payload = {"results": self._make_chain_result(volume=5000, oi=500)}
 
         class FakeResp:
-            def read(self):
-                return response.encode()
-            def __enter__(self):
-                return self
-            def __exit__(self, *a):
-                pass
+            status_code = 200
+            def raise_for_status(self): pass
+            def json(self): return payload
 
         with patch.dict(os.environ, {
             "FEATURE_OPTIONS_FLOW": "true",
@@ -62,21 +59,18 @@ class TestOptionsFlowMonitorSignals(unittest.TestCase):
         }):
             import options_flow_monitor as ofm
             importlib.reload(ofm)
-            with patch("urllib.request.urlopen", return_value=FakeResp()):
+            with patch("httpx.get", return_value=FakeResp()):
                 result = ofm.detect_unusual_flow("NVDA")
         self.assertEqual(result, "unusual_calls")
 
     def test_normal_on_low_volume(self):
         import importlib, os, json
-        response = json.dumps({"results": self._make_chain_result(volume=100, oi=10000)})
+        payload = {"results": self._make_chain_result(volume=100, oi=10000)}
 
         class FakeResp:
-            def read(self):
-                return response.encode()
-            def __enter__(self):
-                return self
-            def __exit__(self, *a):
-                pass
+            status_code = 200
+            def raise_for_status(self): pass
+            def json(self): return payload
 
         with patch.dict(os.environ, {
             "FEATURE_OPTIONS_FLOW": "true",
@@ -84,7 +78,7 @@ class TestOptionsFlowMonitorSignals(unittest.TestCase):
         }):
             import options_flow_monitor as ofm
             importlib.reload(ofm)
-            with patch("urllib.request.urlopen", return_value=FakeResp()):
+            with patch("httpx.get", return_value=FakeResp()):
                 result = ofm.detect_unusual_flow("NVDA")
         self.assertEqual(result, "normal")
 
@@ -97,9 +91,9 @@ class TestOptionsFlowMonitorSignals(unittest.TestCase):
         }):
             import options_flow_monitor as ofm
             importlib.reload(ofm)
-            with patch("urllib.request.urlopen") as mock_url:
+            with patch("httpx.get") as mock_get:
                 results = ofm.run_monitor(["AAPL"], dry_run=True)
-                mock_url.assert_not_called()
+                mock_get.assert_not_called()
         self.assertEqual(results["AAPL"], "normal")
 
 

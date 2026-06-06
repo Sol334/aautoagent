@@ -119,7 +119,7 @@ class MacroAgent:
             import urllib.request, json as _json
             url = (
                 f"https://fred.stlouisfed.org/graph/fredgraph.json"
-                f"?id={series_id}&vintage_date="
+                f"?id={series_id}"
             )
             with urllib.request.urlopen(url, timeout=5) as resp:
                 data = _json.loads(resp.read())

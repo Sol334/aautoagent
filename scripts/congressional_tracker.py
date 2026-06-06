@@ -191,7 +191,9 @@ def load_state() -> dict:
 
 def save_state(state: dict) -> None:
     STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    STATE_PATH.write_text(json.dumps(state, indent=2, default=str))
+    tmp = STATE_PATH.with_suffix(".tmp")
+    tmp.write_text(json.dumps(state, indent=2, default=str))
+    tmp.replace(STATE_PATH)
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────

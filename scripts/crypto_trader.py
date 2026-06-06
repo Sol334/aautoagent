@@ -93,7 +93,7 @@ def _is_live_trading_enabled() -> bool:
     )
 
 
-def _place_coinbase_order(symbol: str, action: str, usd_amount: float) -> bool:
+def _place_coinbase_order(symbol: str, action: str, usd_amount: float, price: float) -> bool:
     """Place a real Coinbase order. Only reached when all safety gates pass."""
     try:
         from coinbase.rest import RESTClient
@@ -106,13 +106,17 @@ def _place_coinbase_order(symbol: str, action: str, usd_amount: float) -> bool:
             client.market_order_buy(
                 client_order_id=order_id,
                 product_id=product_id,
-                quote_size=str(usd_amount),
+                quote_size=str(usd_amount),       # USD to spend
             )
         else:
+            if price <= 0:
+                log.error("Cannot place SELL — invalid price %.2f", price)
+                return False
+            base_size = usd_amount / price        # crypto quantity = USD / price
             client.market_order_sell(
                 client_order_id=order_id,
                 product_id=product_id,
-                base_size=str(usd_amount),
+                base_size=f"{base_size:.8f}",
             )
         log.info("Coinbase order placed: %s %s $%.2f", action, product_id, usd_amount)
         return True
@@ -181,7 +185,7 @@ def run(since_hours: int = 24, dry_run: bool = False) -> None:
 
         if not dry_run:
             if live and action in ("BUY", "SELL"):
-                entry["executed"] = _place_coinbase_order(symbol, action, usd_amount)
+                entry["executed"] = _place_coinbase_order(symbol, action, usd_amount, price)
             _log_trade(entry)
 
     print(f"{'='*60}\n")

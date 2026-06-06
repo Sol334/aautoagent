@@ -69,7 +69,9 @@ def _load_state() -> set:
 
 
 def _save_state(seen: set) -> None:
-    STATE_PATH.write_text(json.dumps(sorted(seen), indent=2))
+    tmp = STATE_PATH.with_suffix(".tmp")
+    tmp.write_text(json.dumps(sorted(seen), indent=2))
+    tmp.replace(STATE_PATH)
 
 
 def _append_log(entry: dict) -> None:
@@ -82,7 +84,9 @@ def _append_log(entry: dict) -> None:
             pass
     log_entries.append(entry)
     # Keep last 1000 entries
-    LOG_PATH.write_text(json.dumps(log_entries[-1000:], indent=2))
+    tmp = LOG_PATH.with_suffix(".tmp")
+    tmp.write_text(json.dumps(log_entries[-1000:], indent=2))
+    tmp.replace(LOG_PATH)
 
 
 # ── Telegram ──────────────────────────────────────────────────────────────────────────────────
@@ -140,7 +144,7 @@ def _detect_clusters(trades: list, ticker: str) -> bool:
         if t.get("transactionDate", "") >= window.strftime("%Y-%m-%d")
     ]
     reps = Counter(t.get("name", "") for t in recent)
-    unique_reps = sum(1 for v in reps.values() if v > 0)
+    unique_reps = len(reps)
     return unique_reps >= CLUSTER_MIN
 
 

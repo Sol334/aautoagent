@@ -70,7 +70,7 @@ def _is_kill_switch_active() -> bool:
     if peak <= 0:
         return False
     drawdown_pct = (peak - current) / peak * 100
-    return drawdown_pct > MAX_DRAWDOWN_PCT
+    return drawdown_pct > _get_effective_drawdown_limit()
 
 
 def _fetch_quotes(tickers: list) -> dict:

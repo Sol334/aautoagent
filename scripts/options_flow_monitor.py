@@ -82,28 +82,37 @@ def detect_unusual_flow(ticker: str) -> str:
 
 def _check_flow(ticker: str, contract_type: str) -> bool:
     """Returns True if unusual flow detected for the given contract type."""
-    import urllib.request, json, urllib.error
+    import httpx
 
     expiry_min = (date.today() + timedelta(days=21)).isoformat()
     expiry_max = (date.today() + timedelta(days=45)).isoformat()
 
-    url = (
-        f"https://api.polygon.io/v3/snapshot/options/{ticker}"
-        f"?contract_type={contract_type}"
-        f"&expiration_date.gte={expiry_min}"
-        f"&expiration_date.lte={expiry_max}"
-        f"&limit=50"
-        f"&apiKey={POLYGON_KEY}"
-    )
+    # Key passed as a query param dict — httpx does NOT embed params in exception messages,
+    # preventing the API key from appearing in logs or tracebacks.
+    params = {
+        "contract_type": contract_type,
+        "expiration_date.gte": expiry_min,
+        "expiration_date.lte": expiry_max,
+        "limit": 50,
+        "apiKey": POLYGON_KEY,
+    }
 
     try:
-        with urllib.request.urlopen(url, timeout=8) as resp:
-            data = json.loads(resp.read())
-    except urllib.error.HTTPError as exc:
-        if exc.code == 403:
+        resp = httpx.get(
+            f"https://api.polygon.io/v3/snapshot/options/{ticker}",
+            params=params,
+            timeout=8,
+        )
+        if resp.status_code == 403:
             log.debug("Polygon 403 — key may lack options access")
             return False
+        resp.raise_for_status()
+        data = resp.json()
+    except httpx.HTTPStatusError:
         raise
+    except Exception as exc:
+        log.debug("Polygon options fetch error: %s", exc)
+        return False
 
     results = data.get("results", [])
     if not results:
@@ -127,9 +136,11 @@ def _check_flow(ticker: str, contract_type: str) -> bool:
         return False
 
     vol_oi_ratio = total_vol / total_oi
-    avg_vol = total_oi / len(otm)  # rough proxy for typical daily volume
+    # Use 10% of total OI as a proxy for "normal" daily volume (typical turnover assumption).
+    # This is an approximation; replace with 20-day historical average when available.
+    typical_daily_vol = total_oi * 0.10
 
-    return vol_oi_ratio > _VOL_OI_THRESHOLD and total_vol > avg_vol * _VOLUME_MULTIPLIER
+    return vol_oi_ratio > _VOL_OI_THRESHOLD and total_vol > typical_daily_vol * _VOLUME_MULTIPLIER
 
 
 def run_monitor(tickers: list[str], dry_run: bool) -> dict[str, str]:
