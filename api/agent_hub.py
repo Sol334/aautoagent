@@ -1,4 +1,7 @@
+import json
 import logging
+import os
+import time
 import uuid
 from contextlib import asynccontextmanager
 from typing import Any
@@ -11,6 +14,58 @@ from api.schemas import AgentCard, JsonRpcRequest, JsonRpcResponse, Message, Par
 log = logging.getLogger(__name__)
 
 _AGENTS: dict[str, Any] = {}
+
+
+# ── TaskStore ─────────────────────────────────────────────────────────────────
+
+class TaskStore:
+    """Redis-backed task store with automatic in-memory fallback."""
+
+    _TTL = 3600  # 1 hour
+
+    def __init__(self, redis_url: str = "redis://localhost:6380"):
+        self._redis = None
+        self._memory: dict[str, dict] = {}
+        try:
+            import redis
+            r = redis.from_url(redis_url, socket_connect_timeout=1, socket_timeout=1)
+            r.ping()
+            self._redis = r
+            log.info("TaskStore: connected to Redis at %s", redis_url)
+        except Exception as exc:
+            log.info("TaskStore: Redis unavailable (%s) — using in-memory fallback", exc)
+
+    def set(self, task_id: str, task: dict) -> None:
+        payload = json.dumps(task)
+        if self._redis:
+            try:
+                self._redis.setex(task_id, self._TTL, payload)
+                return
+            except Exception:
+                pass
+        self._memory[task_id] = {"payload": payload, "expires": time.time() + self._TTL}
+        # Evict expired in-memory entries (keep it small)
+        now = time.time()
+        self._memory = {k: v for k, v in self._memory.items() if v["expires"] > now}
+
+    def get(self, task_id: str) -> dict | None:
+        if self._redis:
+            try:
+                raw = self._redis.get(task_id)
+                return json.loads(raw) if raw else None
+            except Exception:
+                pass
+        entry = self._memory.get(task_id)
+        if entry and entry["expires"] > time.time():
+            return json.loads(entry["payload"])
+        return None
+
+    @property
+    def backend(self) -> str:
+        return "redis" if self._redis else "memory"
+
+
+_task_store = TaskStore(os.getenv("REDIS_URL", "redis://localhost:6380"))
 
 
 @asynccontextmanager
@@ -32,7 +87,11 @@ app = FastAPI(title="Galactic Capital — Agent Hub", version="1.0.0", lifespan=
 
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok", "agents": list(_AGENTS.keys())}
+    return {
+        "status": "ok",
+        "agents": list(_AGENTS.keys()),
+        "task_store": _task_store.backend,
+    }
 
 
 @app.get("/agents")
@@ -78,8 +137,10 @@ def _dispatch(agent_name: str, request: JsonRpcRequest) -> JSONResponse:
             message=Message(role="user", parts=[Part(text=text)]),
             result=result_text,
         )
+        task_dict = task.model_dump()
+        _task_store.set(task_id, task_dict)
         return JSONResponse(
-            JsonRpcResponse(id=request.id, result=task.model_dump()).model_dump()
+            JsonRpcResponse(id=request.id, result=task_dict).model_dump()
         )
     except Exception as exc:
         log.exception("Agent '%s' raised an unhandled exception", agent_name)
@@ -96,6 +157,14 @@ async def call_agent(agent_name: str, request: JsonRpcRequest) -> JSONResponse:
     if agent_name not in _AGENTS:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_name}' not found")
     return _dispatch(agent_name, request)
+
+
+@app.get("/tasks/{task_id}")
+def get_task(task_id: str):
+    task = _task_store.get(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Task not found or expired")
+    return {"jsonrpc": "2.0", "result": task}
 
 
 @app.post("/tasks/send")

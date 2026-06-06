@@ -6,6 +6,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+# Patch redis.from_url to always raise so TaskStore uses memory fallback in tests.
+_redis_stub = types.ModuleType("redis")
+_redis_stub.from_url = MagicMock(side_effect=Exception("Redis not available in tests"))
+sys.modules.setdefault("redis", _redis_stub)
+
 # Ensure repo root is on the path so `api` package resolves correctly
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
@@ -153,3 +158,43 @@ def test_jsonrpc_error_on_agent_crash(client):
         assert "error" in body
         assert body["error"]["code"] == -32603
         assert "boom" in body["error"]["message"]
+
+
+# ---------------------------------------------------------------------------
+# 8. GET /tasks/{task_id} — returns stored task after a call
+# ---------------------------------------------------------------------------
+
+def test_get_task_after_call(client):
+    with patch.object(_AGENTS["watchdog"], "handle", return_value='{"new_trades": 0}'):
+        post_resp = client.post("/agents/watchdog", json=_rpc("dry run watchdog"))
+        assert post_resp.status_code == 200
+        task_id = post_resp.json()["result"]["id"]
+
+    get_resp = client.get(f"/tasks/{task_id}")
+    assert get_resp.status_code == 200
+    body = get_resp.json()
+    assert body["jsonrpc"] == "2.0"
+    assert body["result"]["id"] == task_id
+    assert body["result"]["status"] == "completed"
+
+
+# ---------------------------------------------------------------------------
+# 9. GET /tasks/{task_id} — 404 for unknown task_id
+# ---------------------------------------------------------------------------
+
+def test_get_task_not_found(client):
+    resp = client.get("/tasks/nonexistent-task-id-xyz")
+    assert resp.status_code == 404
+    assert "not found" in resp.json()["detail"].lower()
+
+
+# ---------------------------------------------------------------------------
+# 10. GET /health — includes task_store key
+# ---------------------------------------------------------------------------
+
+def test_health_includes_task_store(client):
+    resp = client.get("/health")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "task_store" in data
+    assert data["task_store"] in ("redis", "memory")
