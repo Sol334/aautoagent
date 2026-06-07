@@ -11,7 +11,7 @@ run on the same machine.
 ```bash
 pip install -r requirements.txt
 cp .env.template .env        # fill in FINNHUB / ALPACA / POLYGON / FRED keys
-pytest tests/ -q             # 313 tests, fully mocked — no keys needed
+pytest tests/ -q             # 326 tests, fully mocked — no keys needed
 ```
 
 ## Common Commands
@@ -86,7 +86,7 @@ make analyst     # market_analyst --dry-run --ticker NVDA
 │   └── Capital.md              Living context: active signals, positions, risk rules
 ├── config/
 │   └── docker-compose.capital.yml  Postgres:5433, Redis:6380
-└── tests/                      313 tests, fully mocked
+└── tests/                      326 tests, fully mocked
 ```
 
 ## Signal Pipeline (market_analyst.py)
