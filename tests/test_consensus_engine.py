@@ -195,5 +195,89 @@ class TestNeverRaises(unittest.TestCase):
         self.assertIsInstance(result, ConsensusSignal)
 
 
+# ── Edge case tests ───────────────────────────────────────────────────────────
+
+class TestTenPercentOwnerTitleWeight(unittest.TestCase):
+    def test_ten_percent_owner_returns_half_weight(self):
+        self.assertEqual(ConsensusEngine._title_weight("10% Owner"), 0.5)
+
+    def test_ceo_buy_scores_higher_than_ten_pct_owner_buy(self):
+        engine = ConsensusEngine()
+        result_ceo = engine.score("AAPL", insider_trades=[_make_trade(is_buy=True, title="CEO")])
+        result_ten = engine.score("AAPL", insider_trades=[_make_trade(is_buy=True, title="10% Owner")])
+        self.assertGreater(result_ceo.weighted_score, result_ten.weighted_score)
+
+
+class TestUnknownTitleHasLowestWeight(unittest.TestCase):
+    def test_empty_title_returns_quarter_weight(self):
+        self.assertEqual(ConsensusEngine._title_weight(""), 0.25)
+
+    def test_ceo_buy_scores_higher_than_unknown_title(self):
+        engine = ConsensusEngine()
+        result_ceo = engine.score("AAPL", insider_trades=[_make_trade(is_buy=True, title="CEO")])
+        result_unk = engine.score("AAPL", insider_trades=[_make_trade(is_buy=True, title="")])
+        self.assertGreater(result_ceo.weighted_score, result_unk.weighted_score)
+
+
+class TestBearishPoliticalSignalDecreasesScore(unittest.TestCase):
+    def test_bearish_political_contributes_negative_0_20(self):
+        engine = ConsensusEngine()
+        result = engine.score("MSFT", political_signal="bearish (congressional)")
+        # political weight = 0.20, score = -1.0 → contribution = -0.20; all other inputs = 0
+        self.assertAlmostEqual(result.weighted_score, -0.20, places=6)
+
+
+class TestBullishPoliticalVsBearishOptionsCancelPartially(unittest.TestCase):
+    def test_opposing_signals_of_equal_weight_cancel(self):
+        engine = ConsensusEngine()
+        result = engine.score(
+            "JPM",
+            political_signal="bullish (congressional)",  # +1.0 * 0.20 = +0.20
+            options_flow="unusual_puts",                 # -1.0 * 0.20 = -0.20
+        )
+        self.assertAlmostEqual(result.weighted_score, 0.0, places=6)
+
+
+class TestAllBearishInsiderTradesScoreNegative(unittest.TestCase):
+    def test_three_ceo_sells_produce_negative_score(self):
+        engine = ConsensusEngine()
+        sells = [
+            _make_trade(is_buy=False, title="CEO"),
+            _make_trade(is_buy=False, title="CEO"),
+            _make_trade(is_buy=False, title="CEO"),
+        ]
+        result = engine.score("TSLA", insider_trades=sells)
+        self.assertLess(result.weighted_score, 0)
+
+
+class TestRecencyWeightBoundaryExactly7Days(unittest.TestCase):
+    def test_exactly_7_days_old_returns_full_weight(self):
+        seven_days_ago = (date.today() - timedelta(days=7)).isoformat()
+        self.assertEqual(ConsensusEngine._recency_weight(seven_days_ago, date.today()), 1.0)
+
+
+class TestRecencyWeightBoundaryExactly14Days(unittest.TestCase):
+    def test_exactly_14_days_old_returns_three_quarter_weight(self):
+        fourteen_days_ago = (date.today() - timedelta(days=14)).isoformat()
+        self.assertEqual(ConsensusEngine._recency_weight(fourteen_days_ago, date.today()), 0.75)
+
+
+class TestScoreClampedWhenAllSignalsBearishMax(unittest.TestCase):
+    def test_max_bearish_is_minus_0_95_not_minus_1(self):
+        """Earnings component is always 0.0, so max raw bearish = -0.95."""
+        engine = ConsensusEngine()
+        result = engine.score(
+            "ZZZ",
+            sentiment=-1.0,
+            trend="down",
+            options_flow="unusual_puts",
+            fundamental=_make_fundamental("BEARISH", 1.0),
+            insider_trades=[_make_trade(is_buy=False, title="CEO")],
+            political_signal="bearish (congressional)",
+        )
+        # -0.25(insider) -0.20(political) -0.20(options) -0.15(fund) -0.10(sent) -0.05(forecast) = -0.95
+        self.assertAlmostEqual(result.weighted_score, -0.95, places=6)
+
+
 if __name__ == "__main__":
     unittest.main()
