@@ -38,6 +38,7 @@ from agents.sentiment_agent import SentimentAgent
 from agents.forecast_agent import ForecastAgent
 from agents.earnings_agent import EarningsAgent
 from agents.fundamental_analyst import FundamentalAnalyst
+from agents.macro_agent import MacroAgent
 from scripts.options_flow_monitor import detect_unusual_flow
 from data_pipelines.edgar_connector import EDGARConnector
 from decision.consensus_engine import ConsensusEngine
@@ -96,6 +97,7 @@ def _ask_ollama(
     options_flow: str = "normal",
     fundamentals_summary: str = "",
     consensus_summary: str = "",
+    macro_context: str = "",
 ) -> tuple:
     """Query Ollama for a BUY/SELL/HOLD recommendation. Returns (action, reason)."""
     extra_lines = ""
@@ -107,6 +109,8 @@ def _ask_ollama(
         extra_lines += f"- Fundamentals: {fundamentals_summary}\n"
     if consensus_summary:
         extra_lines += f"- Signal consensus: {consensus_summary}\n"
+    if macro_context:
+        extra_lines += f"- Macro environment: {macro_context}\n"
 
     prompt = (
         f"You are a financial analyst. For ticker {ticker}:\n"
@@ -186,7 +190,17 @@ def run_analysis(tickers: list, dry_run: bool = False) -> dict:
     fundamental_analyst = FundamentalAnalyst()
     edgar = EDGARConnector()
     consensus_engine = ConsensusEngine()
+    macro_agent = MacroAgent()
     political = _read_political_signals()
+
+    try:
+        macro_ctx = macro_agent.get_macro_context()
+    except Exception:
+        macro_ctx = ""
+    try:
+        current_regime = macro_agent.get_regime()
+    except Exception:
+        current_regime = "neutral"
 
     results = {}
     for ticker in tickers:
@@ -231,7 +245,7 @@ def run_analysis(tickers: list, dry_run: bool = False) -> dict:
 
         action, reason = _ask_ollama(
             ticker, score, trend, pol_signal, earnings_summary, flow, fund_signal.summary,
-            consensus.summary,
+            consensus.summary, macro_context=macro_ctx,
         )
 
         results[ticker] = {
@@ -242,6 +256,7 @@ def run_analysis(tickers: list, dry_run: bool = False) -> dict:
             "fundamentals": fund_signal.signal,
             "consensus_score": consensus.weighted_score,
             "conviction": consensus.conviction,
+            "macro_regime": current_regime,
         }
         log.info(
             "%s: %s  sentiment %.2f  forecast %s", ticker, action, score, trend

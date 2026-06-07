@@ -225,5 +225,111 @@ class TestCryptoTraderPaperMode(unittest.TestCase):
                 mock_order.assert_not_called()
 
 
+class TestRunAnalysisIntegration(unittest.TestCase):
+    """run_analysis() end-to-end: all 7 agents + ConsensusEngine + MacroAgent wired."""
+
+    def _make_capital_md(self, tmp_path):
+        md = tmp_path / "Capital.md"
+        md.write_text("# Capital\n\n## Active Signals\n\n*No signals yet.*\n")
+        return md
+
+    def _base_patches(self, ma, md_path):
+        return [
+            patch.object(ma.SentimentAgent, "fetch_headlines", return_value=[]),
+            patch.object(ma.SentimentAgent, "analyze_headlines", return_value=0.1),
+            patch.object(ma.ForecastAgent, "predict_trend", return_value="up"),
+            patch.object(ma, "_fetch_prices", return_value=[100.0] * 30),
+            patch.object(ma.EarningsAgent, "get_earnings_context", return_value={
+                "days_to_earnings": 20, "is_within_window": False,
+                "eps_estimate": None, "revenue_estimate": None, "summary": "No earnings soon",
+            }),
+            patch("scripts.options_flow_monitor.detect_unusual_flow", return_value="normal"),
+            patch.object(ma.FundamentalAnalyst, "analyze",
+                         return_value=MagicMock(signal="BULLISH", confidence=0.7,
+                                                summary="PE reasonable")),
+            patch.object(ma.EDGARConnector, "get_insider_trades", return_value=[]),
+            patch.object(ma, "_ask_ollama", return_value=("BUY", "strong momentum")),
+            patch("agents.macro_agent.MacroAgent.get_macro_context",
+                  return_value="Macro regime: risk_on, VIX 15.0"),
+            patch("agents.macro_agent.MacroAgent.get_regime", return_value="risk_on"),
+        ]
+
+    def test_returns_dict_with_required_keys(self):
+        import importlib
+        import market_analyst as ma_mod
+        importlib.reload(ma_mod)
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            ma_mod.CAPITAL_MD = self._make_capital_md(Path(td))
+            patches = self._base_patches(ma_mod, ma_mod.CAPITAL_MD)
+            with patches[0], patches[1], patches[2], patches[3], patches[4], \
+                 patches[5], patches[6], patches[7], patches[8], patches[9], patches[10]:
+                result = ma_mod.run_analysis(["AAPL"], dry_run=True)
+        self.assertIn("AAPL", result)
+        for key in ("action", "reason", "score", "trend", "fundamentals",
+                    "consensus_score", "conviction", "macro_regime"):
+            self.assertIn(key, result["AAPL"], f"Missing key: {key}")
+
+    def test_dry_run_does_not_write_capital_md(self):
+        import importlib
+        import market_analyst as ma_mod
+        importlib.reload(ma_mod)
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            md = self._make_capital_md(Path(td))
+            original = md.read_text()
+            ma_mod.CAPITAL_MD = md
+            with patch.object(ma_mod.SentimentAgent, "fetch_headlines", return_value=[]), \
+                 patch.object(ma_mod.SentimentAgent, "analyze_headlines", return_value=0.0), \
+                 patch.object(ma_mod, "_fetch_prices", return_value=[]), \
+                 patch.object(ma_mod.ForecastAgent, "predict_trend", return_value="flat"), \
+                 patch.object(ma_mod.EarningsAgent, "get_earnings_context", return_value={
+                     "days_to_earnings": None, "is_within_window": False,
+                     "eps_estimate": None, "revenue_estimate": None, "summary": "",
+                 }), \
+                 patch("scripts.options_flow_monitor.detect_unusual_flow", return_value="normal"), \
+                 patch.object(ma_mod.FundamentalAnalyst, "analyze",
+                              return_value=MagicMock(signal="NEUTRAL", confidence=0.0, summary="")), \
+                 patch.object(ma_mod.EDGARConnector, "get_insider_trades", return_value=[]), \
+                 patch.object(ma_mod, "_ask_ollama", return_value=("HOLD", "no signal")), \
+                 patch("agents.macro_agent.MacroAgent.get_macro_context", return_value=""), \
+                 patch("agents.macro_agent.MacroAgent.get_regime", return_value="neutral"):
+                ma_mod.run_analysis(["MSFT"], dry_run=True)
+            self.assertEqual(md.read_text(), original)
+
+    def test_macro_context_forwarded_to_ask_ollama(self):
+        import importlib
+        import market_analyst as ma_mod
+        importlib.reload(ma_mod)
+        import tempfile
+        captured = {}
+
+        def _capture(*args, **kwargs):
+            captured.update(kwargs)
+            return ("HOLD", "test")
+
+        with tempfile.TemporaryDirectory() as td:
+            ma_mod.CAPITAL_MD = self._make_capital_md(Path(td))
+            with patch.object(ma_mod.SentimentAgent, "fetch_headlines", return_value=[]), \
+                 patch.object(ma_mod.SentimentAgent, "analyze_headlines", return_value=0.0), \
+                 patch.object(ma_mod, "_fetch_prices", return_value=[]), \
+                 patch.object(ma_mod.ForecastAgent, "predict_trend", return_value="flat"), \
+                 patch.object(ma_mod.EarningsAgent, "get_earnings_context", return_value={
+                     "is_within_window": False, "summary": "",
+                     "days_to_earnings": None, "eps_estimate": None, "revenue_estimate": None,
+                 }), \
+                 patch("scripts.options_flow_monitor.detect_unusual_flow", return_value="normal"), \
+                 patch.object(ma_mod.FundamentalAnalyst, "analyze",
+                              return_value=MagicMock(signal="NEUTRAL", confidence=0.0, summary="")), \
+                 patch.object(ma_mod.EDGARConnector, "get_insider_trades", return_value=[]), \
+                 patch.object(ma_mod, "_ask_ollama", side_effect=_capture), \
+                 patch("agents.macro_agent.MacroAgent.get_macro_context",
+                       return_value="Macro regime: risk_off, yield curve inverted (-0.5%), VIX 28.0"), \
+                 patch("agents.macro_agent.MacroAgent.get_regime", return_value="risk_off"):
+                ma_mod.run_analysis(["SPY"], dry_run=True)
+        self.assertIn("macro_context", captured)
+        self.assertIn("risk_off", captured["macro_context"])
+
+
 if __name__ == "__main__":
     unittest.main()
