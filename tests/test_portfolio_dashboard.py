@@ -1,7 +1,6 @@
 """Tests for scripts/portfolio_dashboard.py"""
 
 import json
-import os
 import subprocess
 import sys
 import tempfile

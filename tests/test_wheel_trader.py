@@ -1,7 +1,6 @@
 """Tests for galactic-capital/scripts/wheel_trader.py"""
 
 import json
-import math
 import os
 import sys
 import tempfile
@@ -367,7 +366,7 @@ class TestLogSimulation(unittest.TestCase):
         }
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            fake_log = Path(tmpdir) / "wheel_log.json"
+            Path(tmpdir) / "wheel_log.json"
             # Patch CAPITAL_ROOT so the log goes to our tmp dir
             with patch.object(wt, "CAPITAL_ROOT", Path(tmpdir)):
                 # Create the data subdir that the function uses

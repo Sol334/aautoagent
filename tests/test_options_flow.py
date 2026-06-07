@@ -45,7 +45,7 @@ class TestOptionsFlowMonitorSignals(unittest.TestCase):
         ]
 
     def test_unusual_calls_detected(self):
-        import importlib, os, json
+        import importlib, os
         payload = {"results": self._make_chain_result(volume=5000, oi=500)}
 
         class FakeResp:
@@ -64,7 +64,7 @@ class TestOptionsFlowMonitorSignals(unittest.TestCase):
         self.assertEqual(result, "unusual_calls")
 
     def test_normal_on_low_volume(self):
-        import importlib, os, json
+        import importlib, os
         payload = {"results": self._make_chain_result(volume=100, oi=10000)}
 
         class FakeResp:

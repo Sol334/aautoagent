@@ -36,7 +36,7 @@ def _make_fundamental(signal: str, confidence: float, summary: str = "") -> type
     return types.SimpleNamespace(
         signal=signal,
         confidence=confidence,
-        summary=summary or f"PE=18, RevGrowth=22%",
+        summary=summary or "PE=18, RevGrowth=22%",
     )
 
 

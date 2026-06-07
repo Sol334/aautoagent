@@ -326,7 +326,7 @@ def run(tickers: list[str], dry_run: bool) -> None:
     print(f"  GALACTIC CAPITAL — Wheel Strategy {'(DRY-RUN)' if dry_run else '(SIMULATION)'}")
     print(f"  Capital: ${STARTING_CAPITAL:.0f} | Target: weekly CSP on SPY/QQQ")
     if risk_off:
-        print(f"  *** RISK-OFF REGIME — Recommended contracts halved ***")
+        print("  *** RISK-OFF REGIME — Recommended contracts halved ***")
     print(f"{'='*65}")
 
     for ticker in tickers:

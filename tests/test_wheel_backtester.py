@@ -24,7 +24,6 @@ if "yfinance" not in sys.modules:
 if not hasattr(sys.modules["yfinance"], "Ticker"):
     sys.modules["yfinance"].Ticker = MagicMock()
 
-import numpy as np  # noqa: E402 — real numpy required for backtest math
 
 from scripts.wheel_backtester import backtest_wheel, _render_report  # noqa: E402
 
