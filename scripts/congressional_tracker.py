@@ -22,8 +22,9 @@ Env vars:
     CAPITAL_WATCHLIST — comma-separated tickers to monitor
 """
 
-import os, json, logging, argparse
+import os, re, json, logging, argparse
 from collections import defaultdict
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -41,6 +42,38 @@ STATE_PATH    = Path(os.getenv("WATCHDOG_STATE_PATH", "/tmp/galactic/capital/con
 
 _HOUSE_WATCHER_URL = "https://housestockwatcher.com/api"
 _QUIVER_BASE       = "https://api.quiverquant.com/beta"
+
+
+# ── Public dataclass (spec-compliant API surface) ─────────────────────────────
+
+@dataclass
+class CongressTrade:
+    ticker: str
+    rep_name: str
+    chamber: str
+    trade_date: str
+    trade_type: str
+    amount_range: str
+    amount_est: float
+    sector: str
+    source: str
+
+
+def parse_amount_est(amount_str: str) -> float:
+    """Parse '$50,001 - $100,000' → 75000.0  |  '$1,000,001 +' → 1000001.0."""
+    if not amount_str:
+        return 0.0
+    try:
+        cleaned = re.sub(r"[^\d\-]", "", amount_str)
+        if "-" in cleaned:
+            parts = cleaned.split("-")
+            if len(parts) == 2 and parts[0] and parts[1]:
+                return (float(parts[0]) + float(parts[1])) / 2.0
+        if cleaned:
+            return float(cleaned)
+    except Exception:
+        pass
+    return 0.0
 
 
 # ── Data fetching ─────────────────────────────────────────────────────────────
@@ -176,6 +209,54 @@ def sector_pressure(trades: list[dict]) -> dict[str, dict]:
             pressure[sector]["sells"] += 1
     # Convert sets to counts for serialization
     return {k: {**v, "members": len(v["members"])} for k, v in pressure.items()}
+
+
+# ── Spec-compliant aliases (return CongressTrade dataclasses) ─────────────────
+
+def _dict_to_trade(t: dict, source: str) -> CongressTrade:
+    raw_type = t.get("type", "")
+    trade_type = "Purchase" if "purchase" in raw_type.lower() or "buy" in raw_type.lower() else (
+        "Sale" if "sale" in raw_type.lower() or "sell" in raw_type.lower() else raw_type.capitalize()
+    )
+    amt_range = t.get("amount", "")
+    return CongressTrade(
+        ticker=t.get("ticker", "").upper(),
+        rep_name=t.get("member", ""),
+        chamber=t.get("chamber", "House"),
+        trade_date=t.get("date", ""),
+        trade_type=trade_type,
+        amount_range=amt_range,
+        amount_est=parse_amount_est(amt_range),
+        sector=ticker_sector(t.get("ticker", "")),
+        source=source,
+    )
+
+
+def fetch_house_stock_watcher(days_back: int = 30) -> list[CongressTrade]:
+    return [_dict_to_trade(t, "housestockwatcher") for t in fetch_house_watcher(days_back)]
+
+
+def fetch_quiver_quantitative(days_back: int = 30) -> list[CongressTrade]:
+    return [_dict_to_trade(t, "quiver") for t in fetch_quiver(days_back)]
+
+
+def fetch_all_trades(days_back: int = 30) -> list[CongressTrade]:
+    raw = fetch_trades(days_back)
+    seen: set = set()
+    result: list[CongressTrade] = []
+    for t in raw:
+        trade = _dict_to_trade(t, t.get("source", ""))
+        sig = (trade.ticker, trade.rep_name, trade.trade_date, trade.trade_type)
+        if sig not in seen:
+            seen.add(sig)
+            result.append(trade)
+    return result
+
+
+def filter_by_sector(trades: list[CongressTrade], sector: str) -> list[CongressTrade]:
+    if not sector:
+        return trades
+    return [t for t in trades if t.sector.upper() == sector.upper()]
 
 
 # ── Persistence ───────────────────────────────────────────────────────────────
