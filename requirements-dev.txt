@@ -1,0 +1,6 @@
+# Galactic Capital — dev/test dependencies
+# Install: pip install -r requirements-dev.txt
+-r requirements.txt
+
+pytest>=8.0.0
+ruff>=0.4.0

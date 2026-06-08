@@ -1,0 +1,21 @@
+# ── Secrets — NEVER commit ──
+.env
+*.env
+!.env.template
+
+# ── Runtime state — regenerated on each run ──
+data/
+
+# ── Python ──
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+.venv/
+venv/
+
+# ── OS / editor ──
+.DS_Store
+*.swp

@@ -1,0 +1,44 @@
+version: "3.9"
+
+# Galactic Capital — Docker services
+# Ports deliberately offset from galactic-system services to avoid conflicts:
+#   galactic-system postgres: 5432  →  capital postgres: 5433
+#   galactic-system (none)          →  capital redis:    6380
+#
+# Start: docker compose -f galactic-capital/config/docker-compose.capital.yml up -d
+# Stop:  docker compose -f galactic-capital/config/docker-compose.capital.yml down
+
+services:
+  capital-postgres:
+    image: postgres:16
+    container_name: capital-postgres
+    restart: unless-stopped
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-galactic}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-CHANGE_ME_postgres_password}
+      POSTGRES_DB: galactic_capital
+    volumes:
+      - capital_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-galactic}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  capital-redis:
+    image: redis:7-alpine
+    container_name: capital-redis
+    restart: unless-stopped
+    ports:
+      - "6380:6379"
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  capital_pgdata:
